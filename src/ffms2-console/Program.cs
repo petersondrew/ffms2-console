@@ -17,7 +17,7 @@ namespace ffms2.console
         {
             var cursorTop = Console.CursorTop;
             Console.SetCursorPosition(0, cursorTop);
-            Console.Write(new String(' ', Console.WindowWidth));
+            Console.Write(new string(' ', Console.WindowWidth));
             Console.SetCursorPosition(0, cursorTop);
             Console.Write("{0:P1}", (double)eventArgs.Current / eventArgs.Total);
         }
@@ -25,11 +25,15 @@ namespace ffms2.console
         static void Test()
         {
             // Index the source file.
-            const string file = @"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi";
+            const string file = @"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave";
 
             // ReSharper disable once AssignNullToNotNullAttribute
-            var indexFile = Path.Combine(Path.GetDirectoryName(file), String.Format("{0}.idx", Path.GetFileName(file)));
+            var indexFile = Path.Combine(Path.GetDirectoryName(file), $"{Path.GetFileName(file)}.idx");
             var indexExists = File.Exists(indexFile);
+
+            FFMS2.Initialize();
+            if (!FFMS2.Initialized)
+                throw new Exception("Unable to initialize FFMS2");
 
             using (var indexer = new Indexer(file))
             {
@@ -146,6 +150,8 @@ namespace ffms2.console
                     Console.WriteLine("Press Ctrl-C to quit");
                     QuitEvent.Wait();
                 }
+                //Test();
+                QuitEvent.Wait();
             }
             catch (Exception ex)
             {

@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using ffms2.console.ipc;
 using FFMSSharp;
 using Frame = ffms2.console.ipc.Frame;
@@ -8,6 +11,8 @@ namespace ffms2.console
 {
     internal sealed class FrameRetrievalService : IFrameRetrievalService, IDisposable
     {
+        readonly ConcurrentDictionary<int, VideoSource> videoSources = new ConcurrentDictionary<int, VideoSource>();
+
         bool disposed;
 
         string indexedFile;
@@ -20,8 +25,6 @@ namespace ffms2.console
 
         Resizer frameResizer;
 
-        bool frameOutputFormatSet;
-
         public bool Indexed { get; private set; }
 
         static bool UseCachedIndex(bool useCache, string path) { return useCache && File.Exists(path); }
@@ -32,20 +35,21 @@ namespace ffms2.console
             index = null;
             indexedFile = null;
 
-            if (String.IsNullOrEmpty(file))
-                throw new ArgumentNullException("file");
+            if (string.IsNullOrEmpty(file))
+                throw new ArgumentNullException(nameof(file));
 
             if (!File.Exists(file))
                 throw new FileNotFoundException("Unable to locate supplied file", file);
 
-            if (useCached && !File.Exists(file))
+            if (useCached && !File.Exists(indexCacheFile))
                 throw new FileNotFoundException("Unable to locate supplied index cache file", indexCacheFile);
 
             var fileDirectory = Path.GetDirectoryName(file);
-            if (String.IsNullOrEmpty(fileDirectory))
-                throw new DirectoryNotFoundException(String.Format("Unable to locate parent directory for file {0}", file));
+            if (string.IsNullOrEmpty(fileDirectory))
+                throw new DirectoryNotFoundException($"Unable to locate parent directory for file {file}");
 
-            var indexFile = UseCachedIndex(useCached, indexCacheFile) ? indexCacheFile : Path.Combine(fileDirectory, String.Format("{0}.idx", Path.GetFileName(file)));
+            var indexFile = UseCachedIndex(useCached, indexCacheFile) ? indexCacheFile : Path.Combine(fileDirectory,
+                $"{Path.GetFileName(file)}.idx");
             var indexExists = File.Exists(indexFile);
 
             Indexer indexer = null;
@@ -81,17 +85,14 @@ namespace ffms2.console
             return true;
         }
 
-        public event EventHandler<IndexProgressEventArgs> IndexProgress;
+        public event Action<IndexProgressEventArgs> IndexProgress;
 
         void OnIndexProgress(object sender, IndexingProgressChangeEventArgs eventArgs) { RaiseIndexProgress(new IndexProgressEventArgs(eventArgs.Current, eventArgs.Total)); }
 
         void RaiseIndexProgress(IndexProgressEventArgs progress)
         {
             var handler = IndexProgress;
-            if (handler != null)
-            {
-                handler(this, progress);
-            }
+            handler?.Invoke(progress);
         }
 
         static Resizer CoerceResizer(FrameResizeMethod resizeMethod)
@@ -132,7 +133,6 @@ namespace ffms2.console
             frameWidth = width;
             frameHeight = height;
             frameResizer = CoerceResizer(resizeMethod);
-            frameOutputFormatSet = true;
         }
 
         void CheckTrack(int trackNumber)
@@ -141,7 +141,8 @@ namespace ffms2.console
                 throw new InvalidOperationException("No index available");
 
             if (trackNumber < 0 || trackNumber >= index.NumberOfTracks)
-                throw new ArgumentOutOfRangeException("trackNumber", String.Format("Track must be between 0 and {0}", index.NumberOfTracks - 1));
+                throw new ArgumentOutOfRangeException(nameof(trackNumber),
+                    $"Track must be between 0 and {index.NumberOfTracks - 1}");
         }
 
         Track GetTrack(int trackNumber)
@@ -158,16 +159,18 @@ namespace ffms2.console
         VideoSource GetVideoSource(int trackNumber)
         {
             CheckTrack(trackNumber);
-
-            var videoSource = index.VideoSource(indexedFile, trackNumber, 0);
-            if (!frameOutputFormatSet)
+            var videoSource = videoSources.GetOrAdd(trackNumber, track =>
             {
-                // Get first frame properties to start with
-                var sampleFrame = videoSource.GetFrame(0);
+                var source = index.VideoSource(indexedFile, track, 0);
+                // TODO: Need to make this property per video source
+                var sampleFrame = source.GetFrame(0);
                 // BGRA is required for bitmap export
                 SetFrameOutputFormat(sampleFrame.EncodedResolution.Width, sampleFrame.EncodedResolution.Height, FrameResizeMethod.Bicubic);
-            }
-            videoSource.SetOutputFormat(new[] {framePixelFormat}, frameWidth, frameHeight, frameResizer);
+                source.SetOutputFormat(new[] { framePixelFormat }, frameWidth, frameHeight, frameResizer);
+                //source.SetOutputFormat(new[] { sampleFrame.EncodedPixelFormat }, frameWidth, frameHeight, frameResizer);
+                return source;
+            });
+
             return videoSource;
         }
 
@@ -175,13 +178,24 @@ namespace ffms2.console
         {
             var track = GetTrack(trackNumber);
             if (frameNumber < 0 || frameNumber >= track.NumberOfFrames)
-                throw new ArgumentOutOfRangeException("frameNumber", String.Format("Frame must be between 0 and {0}", track.NumberOfFrames - 1));
+                throw new ArgumentOutOfRangeException(nameof(frameNumber),
+                    $"Frame must be between 0 and {track.NumberOfFrames - 1}");
 
             var frameInfo = track.GetFrameInfo(frameNumber);
             var videoSource = GetVideoSource(trackNumber);
             var extractedFrame = videoSource.GetFrame(frameNumber);
 
-            return new Frame(frameNumber, frameInfo.PTS, extractedFrame.FrameType, extractedFrame.Bitmap);
+            return new Frame(frameNumber, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame, frameInfo.RepeatPicture,
+                extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data[0],
+                extractedFrame.DataLength[0]);
+        }
+
+        public List<IFrame> GetFrameInfos(int trackNumber)
+        {
+            var track = GetTrack(trackNumber);
+            var infos = track.GetFrameInfos();
+
+            return new List<IFrame>(infos.Select(i => new Frame(i.Frame, i.PTS, i.FilePos, i.KeyFrame, i.RepeatPicture)));
         }
 
         public IFrame GetFrameAtPosition(int trackNumber, long position)
@@ -192,7 +206,9 @@ namespace ffms2.console
             var videoSource = GetVideoSource(trackNumber);
             var extractedFrame = videoSource.GetFrameByPosition(position);
 
-            return new Frame(frameInfo.Frame, frameInfo.PTS, extractedFrame.FrameType, extractedFrame.Bitmap);
+            return new Frame(frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
+                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data[0],
+                extractedFrame.DataLength[0]);
         }
 
         public IFrame GetFrameAtTime(int trackNumber, double time)
@@ -203,7 +219,9 @@ namespace ffms2.console
             var frameInfo = track.GetFrameInfoFromPts((long) ((time * 1000 * videoSource.Track.TimeBaseDenominator) / videoSource.Track.TimeBaseNumerator));
             var extractedFrame = videoSource.GetFrameByTime(time);
 
-            return new Frame(frameInfo.Frame, frameInfo.PTS, extractedFrame.FrameType, extractedFrame.Bitmap);
+            return new Frame(frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
+                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data[0],
+                extractedFrame.DataLength[0]);
         }
 
         public FrameRetrievalService()
@@ -218,12 +236,9 @@ namespace ffms2.console
         void Dispose(bool disposing)
         {
             if (disposed) return;
-            if (disposing)
-            {
-                if (index != null)
-                    index.Dispose();
-                disposed = true;
-            }
+            if (!disposing) return;
+            index?.Dispose();
+            disposed = true;
         }
     }
 }

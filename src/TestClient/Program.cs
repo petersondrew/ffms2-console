@@ -11,13 +11,16 @@ namespace TestClient
 {
     internal static class Program
     {
+        static readonly object ConsoleLock = new object();
+
         static void Main()
         {
 #if DEBUG
             var pipeName = "localhost";
 #else
-            var pipeName = Guid.NewGuid().ToString("N");
-            var server = Process.Start(@"E:\Code\ffms2-console\src\ffms2-console\bin\x86\Debug\ffms2.console.exe", pipeName);
+            //var pipeName = Guid.NewGuid().ToString("N");
+            var pipeName = "localhost";
+            var server = Process.Start(@"E:\Code\ffms2-console\src\ffms2-console\bin\x86\Release\ffms2.console.exe", pipeName);
 #endif
             Thread.Sleep(TimeSpan.FromSeconds(2));
             var protocol = new IpcBinaryClientProtocolSetup();
@@ -37,14 +40,44 @@ namespace TestClient
                     Console.ReadKey();
                     return;
                 }
-                var frame = proxy.GetFrame(0, 0);
-                Console.WriteLine("Frame number: {0}", frame.FrameNumber);
-                Console.WriteLine("Frame type: {0}", frame.FrameType);
-                Console.WriteLine("Frame PTS: {0}", TimeSpan.FromMilliseconds(frame.PTS));
-                using (var image = File.Create("frame.bmp"))
-                    frame.ExtractBitmap().Save(image, ImageFormat.Bmp);
 
-                Process.Start("frame.bmp");
+                //foreach (var frame in proxy.GetFrameInfos(0))
+                //{
+                //    Console.WriteLine($"Frame number: {frame.FrameNumber}");
+                //    Console.WriteLine($"Frame type: {frame.FrameType}");
+                //    Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
+                //    Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
+                //    Console.WriteLine($"Frame position: {frame.FilePos}");
+                //    Console.WriteLine($"Frame resolution: {frame.Resolution}");
+                //}
+
+                for (var frameNumber = 0; frameNumber < 100; frameNumber++)
+                {
+                    // Unwrap to prevent marshaling ExtractBitmap call across boundaries (TODO: Can we disconnect the object so we don't have to copy?)
+                    var frame = proxy.GetFrame(0, frameNumber).Unwrap();
+                    Console.WriteLine($"Frame number: {frame.FrameNumber}");
+                    Console.WriteLine($"Frame type: {frame.FrameType}");
+                    Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
+                    Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
+                    Console.WriteLine($"Frame position: {frame.FilePos}");
+                    Console.WriteLine($"Frame resolution: {frame.Resolution}");
+                    var bitmap = frame.ExtractBitmap();
+                    bitmap.Dispose();
+                }
+
+                // Unwrap to prevent marshaling ExtractBitmap call across boundaries (TODO: Can we disconnect the object so we don't have to copy?)
+                //var frame = proxy.GetFrame(0, 0).Unwrap();
+                //Console.WriteLine($"Frame number: {frame.FrameNumber}");
+                //Console.WriteLine($"Frame type: {frame.FrameType}");
+                //Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
+                //Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
+                //Console.WriteLine($"Frame position: {frame.FilePos}");
+                //Console.WriteLine($"Frame resolution: {frame.Resolution}");
+                //const string filename = "frame.bmp";
+                //if (File.Exists(filename)) File.Delete(filename);
+                //frame.ExtractBitmap().Save(filename, ImageFormat.Bmp);
+                //Process.Start("frame.bmp");
+
                 proxy.IndexProgress -= ProxyOnIndexProgress;
             }
 #if !DEBUG
@@ -52,13 +85,16 @@ namespace TestClient
 #endif
         }
 
-        static void ProxyOnIndexProgress(object sender, IndexProgressEventArgs indexProgressEventArgs)
+        static void ProxyOnIndexProgress(IndexProgressEventArgs indexProgressEventArgs)
         {
-            var cursorTop = Console.CursorTop;
-            Console.SetCursorPosition(0, cursorTop);
-            Console.Write(new String(' ', Console.WindowWidth));
-            Console.SetCursorPosition(0, cursorTop);
-            Console.Write("{0:P1}", indexProgressEventArgs.Progress);
+            lock (ConsoleLock)
+            {
+                var cursorTop = Console.CursorTop;
+                Console.SetCursorPosition(0, cursorTop);
+                Console.Write(new string(' ', Console.WindowWidth));
+                Console.SetCursorPosition(0, cursorTop);
+                Console.Write("{0:P1}", indexProgressEventArgs.Progress);
+            }
         }
     }
 }
