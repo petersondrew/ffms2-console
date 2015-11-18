@@ -16,7 +16,7 @@ namespace TestClient
         static void Main()
         {
 #if DEBUG
-            var pipeName = "localhost";
+            const string pipeName = "localhost";
 #else
             //var pipeName = Guid.NewGuid().ToString("N");
             var pipeName = "localhost";
@@ -31,15 +31,20 @@ namespace TestClient
                 Console.WriteLine("Connected to server");
                 var proxy = connection.CreateProxy<IFrameRetrievalService>();
 
+                // Need to debounce this on the other end of the pipe to avoid flooding it
                 proxy.IndexProgress += ProxyOnIndexProgress;
 
                 Console.WriteLine("Indexing file");
-                if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", false))
+                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: false, videoCodec: "h264"))
+                if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true))
                 {
-                    Console.Error.WriteLine("Error indexing file, press any key to quit");
+                    Console.Error.WriteLine($"Error indexing file:{Environment.NewLine}{proxy.LastException}{Environment.NewLine}Press any key to quit");
                     Console.ReadKey();
                     return;
                 }
+                ProxyOnIndexProgress(new IndexProgressEventArgs(1, 1));
+                Console.WriteLine();
+                Console.WriteLine();
 
                 //foreach (var frame in proxy.GetFrameInfos(0))
                 //{
@@ -93,7 +98,7 @@ namespace TestClient
                 Console.SetCursorPosition(0, cursorTop);
                 Console.Write(new string(' ', Console.WindowWidth));
                 Console.SetCursorPosition(0, cursorTop);
-                Console.Write("{0:P1}", indexProgressEventArgs.Progress);
+                Console.Write($"{indexProgressEventArgs.Progress:P1}");
             }
         }
     }

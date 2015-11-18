@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reactive.Linq;
 using ffms2.console.ipc;
 using FFMSSharp;
 using Frame = ffms2.console.ipc.Frame;
@@ -25,11 +27,13 @@ namespace ffms2.console
 
         Resizer frameResizer;
 
+        public Exception LastException { get; private set; }
+
         public bool Indexed { get; private set; }
 
         static bool UseCachedIndex(bool useCache, string path) { return useCache && File.Exists(path); }
 
-        public bool Index(string file, bool useCached = true, string indexCacheFile = null)
+        public bool Index(string file, bool useCached = true, string alternateIndexCacheFileLocation = null, string videoCodec = null)
         {
             Indexed = false;
             index = null;
@@ -41,54 +45,75 @@ namespace ffms2.console
             if (!File.Exists(file))
                 throw new FileNotFoundException("Unable to locate supplied file", file);
 
-            if (useCached && !File.Exists(indexCacheFile))
-                throw new FileNotFoundException("Unable to locate supplied index cache file", indexCacheFile);
-
             var fileDirectory = Path.GetDirectoryName(file);
             if (string.IsNullOrEmpty(fileDirectory))
                 throw new DirectoryNotFoundException($"Unable to locate parent directory for file {file}");
 
-            var indexFile = UseCachedIndex(useCached, indexCacheFile) ? indexCacheFile : Path.Combine(fileDirectory,
-                $"{Path.GetFileName(file)}.idx");
-            var indexExists = File.Exists(indexFile);
+            // If we want to use cached index but don't supply a value, look for the default
+            if (useCached && string.IsNullOrEmpty(alternateIndexCacheFileLocation))
+                alternateIndexCacheFileLocation = Path.Combine(fileDirectory, $"{Path.GetFileName(file)}.idx");
+            else if (useCached && !File.Exists(alternateIndexCacheFileLocation))
+                throw new FileNotFoundException("Unable to locate supplied index cache file", alternateIndexCacheFileLocation);
 
-            Indexer indexer = null;
+            var indexFile = UseCachedIndex(useCached, alternateIndexCacheFileLocation)
+                ? alternateIndexCacheFileLocation
+                : Path.Combine(fileDirectory,
+                    $"{Path.GetFileName(file)}.idx");
+
+            Debug.Assert(indexFile != null, "indexFile != null");
+
+            if (!useCached && File.Exists(indexFile))
+                File.Delete(indexFile);
+
+            var indexExists = File.Exists(indexFile);
+            useCached = useCached && indexExists;
+
+            Indexer indexer;
 
             try
             {
-                using (indexer = new Indexer(file))
+                using (indexer = new Indexer(file, videoCodec))
+                using (Observable.FromEventPattern<IndexingProgressChangeEventArgs>(
+                    h => indexer.UpdateIndexProgress += h, h => indexer.UpdateIndexProgress -= h)
+                    .Sample(TimeSpan.FromMilliseconds(500))
+                    .Subscribe(
+                        evt =>
+                            RaiseIndexProgress(new IndexProgressEventArgs(evt.EventArgs.Current, evt.EventArgs.Total))))
                 {
-                    indexer.UpdateIndexProgress += OnIndexProgress;
-                    index = indexExists ? new Index(indexFile) : indexer.Index();
+                    try
+                    {
+                        index = useCached ? new Index(indexFile) : indexer.Index();
+                    }
+                    catch (IOException wrongVersionException)
+                    {
+                        LastException = wrongVersionException;
+                        index = indexer.Index();
+                    }
 
                     if (useCached && !index.BelongsToFile(file))
-                        throw new IndexMismatchException("Supplied index does not match the file", file, indexCacheFile);
+                        index = indexer.Index();
 
                     Indexed = true;
                     indexedFile = file;
-                    indexer.UpdateIndexProgress -= OnIndexProgress;
 
                     // Save index if necessary
                     if (!indexExists)
                         index.WriteIndex(indexFile);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 index = null;
                 indexedFile = null;
-                if (indexer != null)
-                    indexer.UpdateIndexProgress -= OnIndexProgress;
-                throw;
+                LastException = ex;
+                return false;
             }
 
             return true;
         }
 
         public event Action<IndexProgressEventArgs> IndexProgress;
-
-        void OnIndexProgress(object sender, IndexingProgressChangeEventArgs eventArgs) { RaiseIndexProgress(new IndexProgressEventArgs(eventArgs.Current, eventArgs.Total)); }
-
+        
         void RaiseIndexProgress(IndexProgressEventArgs progress)
         {
             var handler = IndexProgress;
