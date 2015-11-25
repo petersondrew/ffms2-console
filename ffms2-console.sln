@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ffms2-console", "src\ffms2-console\ffms2-console.csproj", "{A6B1C17D-9E00-43CF-A215-9D75C950A8E8}"
 EndProject
@@ -10,6 +10,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestClient", "src\TestClient\TestClient.csproj", "{B841B9D1-C817-409F-B52E-C2A00E7EBC25}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ffms2-console-ipc", "..\ffms2-console-ipc\src\ffms2-console-ipc\ffms2-console-ipc.csproj", "{8008A426-5C43-44DD-9AF1-E73B5D058990}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sdl-display", "src\sdl-display\sdl-display.vcxproj", "{950C10B3-E573-4B55-BF99-FDAEB4460BEB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -77,6 +79,20 @@ Global
 		{8008A426-5C43-44DD-9AF1-E73B5D058990}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{8008A426-5C43-44DD-9AF1-E73B5D058990}.Release|x64.ActiveCfg = Release|Any CPU
 		{8008A426-5C43-44DD-9AF1-E73B5D058990}.Release|x86.ActiveCfg = Release|Any CPU
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Debug|Mixed Platforms.ActiveCfg = Debug|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Debug|Mixed Platforms.Build.0 = Debug|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Debug|x64.ActiveCfg = Debug|x64
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Debug|x64.Build.0 = Debug|x64
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Debug|x86.ActiveCfg = Debug|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Debug|x86.Build.0 = Debug|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Release|Any CPU.ActiveCfg = Release|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Release|Mixed Platforms.ActiveCfg = Release|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Release|Mixed Platforms.Build.0 = Release|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Release|x64.ActiveCfg = Release|x64
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Release|x64.Build.0 = Release|x64
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Release|x86.ActiveCfg = Release|Win32
+		{950C10B3-E573-4B55-BF99-FDAEB4460BEB}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

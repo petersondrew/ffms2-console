@@ -5,8 +5,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
 using ffms2.console.ipc;
 using FFMSSharp;
+using sdldisplay;
 using Frame = ffms2.console.ipc.Frame;
 
 namespace ffms2.console
@@ -26,6 +28,8 @@ namespace ffms2.console
         int frameWidth, frameHeight;
 
         Resizer frameResizer;
+
+        Display display;
 
         public Exception LastException { get; private set; }
 
@@ -191,8 +195,8 @@ namespace ffms2.console
                 var sampleFrame = source.GetFrame(0);
                 // BGRA is required for bitmap export
                 SetFrameOutputFormat(sampleFrame.EncodedResolution.Width, sampleFrame.EncodedResolution.Height, FrameResizeMethod.Bicubic);
-                source.SetOutputFormat(new[] { framePixelFormat }, frameWidth, frameHeight, frameResizer);
-                //source.SetOutputFormat(new[] { sampleFrame.EncodedPixelFormat }, frameWidth, frameHeight, frameResizer);
+                //source.SetOutputFormat(new[] { framePixelFormat }, frameWidth, frameHeight, frameResizer);
+                source.SetOutputFormat(new[] { sampleFrame.EncodedPixelFormat }, frameWidth, frameHeight, frameResizer);
                 return source;
             });
 
@@ -211,8 +215,8 @@ namespace ffms2.console
             var extractedFrame = videoSource.GetFrame(frameNumber);
 
             return new Frame(frameNumber, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame, frameInfo.RepeatPicture,
-                extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data[0],
-                extractedFrame.DataLength[0]);
+                extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data,
+                extractedFrame.DataLength);
         }
 
         public List<IFrame> GetFrameInfos(int trackNumber)
@@ -232,8 +236,8 @@ namespace ffms2.console
             var extractedFrame = videoSource.GetFrameByPosition(position);
 
             return new Frame(frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
-                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data[0],
-                extractedFrame.DataLength[0]);
+                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data,
+                extractedFrame.DataLength);
         }
 
         public IFrame GetFrameAtTime(int trackNumber, double time)
@@ -245,8 +249,36 @@ namespace ffms2.console
             var extractedFrame = videoSource.GetFrameByTime(time);
 
             return new Frame(frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
-                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data[0],
-                extractedFrame.DataLength[0]);
+                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data,
+                extractedFrame.DataLength);
+        }
+
+        public unsafe void DisplayFrame(IFrame frame, IntPtr windowId)
+        {
+            try
+            {
+                InitDisplay(windowId);
+                display.SetSize(frame.Resolution.Width, frame.Resolution.Height);
+                //TODO: Set pixel format
+
+                byte*[] data =
+                {
+                    (byte*) frame.Data[0].ToPointer(),
+                    (byte*) frame.Data[1].ToPointer(),
+                    (byte*) frame.Data[2].ToPointer(),
+                    (byte*) frame.Data[3].ToPointer()
+                };
+
+                fixed (byte** dataPtr = data)
+                fixed (int * lengthsPtr = frame.DataLengths.ToArray())
+                {
+                    display.ShowFrame(dataPtr, lengthsPtr);
+                }
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
         }
 
         public FrameRetrievalService()
@@ -263,7 +295,21 @@ namespace ffms2.console
             if (disposed) return;
             if (!disposing) return;
             index?.Dispose();
+            display?.Dispose();
             disposed = true;
+        }
+
+        void InitDisplay(IntPtr windowId)
+        {
+            if (display == null)
+            {
+                display = new Display(windowId);
+            }
+            else if (display.WindowId != windowId)
+            {
+                display.Dispose();
+                display = new Display(windowId);
+            }
         }
     }
 }
