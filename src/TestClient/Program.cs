@@ -41,9 +41,10 @@ namespace TestClient
                 proxy.IndexProgress += ProxyOnIndexProgress;
 
                 Console.WriteLine("Indexing file");
-                if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true))
+                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true))
                 //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true, videoCodec: "h264"))
-                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: false))
+                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true))
+                if (!proxy.Index(@"E:\Videos\rgb_test.avi", useCached: true))
                 {
                     Console.Error.WriteLine($"Error indexing file:{Environment.NewLine}{proxy.LastException}{Environment.NewLine}Press any key to quit");
                     Console.ReadKey();
@@ -64,9 +65,8 @@ namespace TestClient
                     if (!windowReady.Wait(TimeSpan.FromSeconds(60)))
                         return;
 
-                    for (var frameNumber = 0; frameNumber < 100; frameNumber++)
+                    for (var frameNumber = 0; frameNumber < 500; frameNumber++)
                     {
-                        // Unwrap to prevent marshaling ExtractBitmap call across boundaries (TODO: Can we disconnect the object so we don't have to copy?)
                         var frame = proxy.GetFrame(0, frameNumber);
                         Console.WriteLine($"Frame number: {frame.FrameNumber}");
                         Console.WriteLine($"Frame type: {frame.FrameType}");
@@ -106,8 +106,7 @@ namespace TestClient
 
                 //for (var frameNumber = 0; frameNumber < 100; frameNumber++)
                 //{
-                //    // Unwrap to prevent marshaling ExtractBitmap call across boundaries (TODO: Can we disconnect the object so we don't have to copy?)
-                //    var frame = proxy.GetFrame(0, frameNumber).Unwrap();
+                //    var frame = proxy.GetFrame(0, frameNumber);
                 //    Console.WriteLine($"Frame number: {frame.FrameNumber}");
                 //    Console.WriteLine($"Frame type: {frame.FrameType}");
                 //    Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
@@ -118,8 +117,7 @@ namespace TestClient
                 //    bitmap.Dispose();
                 //}
 
-                // Unwrap to prevent marshaling ExtractBitmap call across boundaries (TODO: Can we disconnect the object so we don't have to copy?)
-                //var frame = proxy.GetFrame(0, 0).Unwrap();
+                //var frame = proxy.GetFrame(0, 0);
                 //Console.WriteLine($"Frame number: {frame.FrameNumber}");
                 //Console.WriteLine($"Frame type: {frame.FrameType}");
                 //Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");

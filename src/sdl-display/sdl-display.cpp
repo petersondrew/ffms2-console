@@ -79,11 +79,11 @@ namespace sdldisplay {
 		if (texture != nullptr)
 			SDL_DestroyTexture(texture);
 
-		pixelFormat = pixelFormat == 0 ? SDL_PIXELFORMAT_IYUV : pixelFormat;
+		pixelFormat = pixelFormat == 0 ? SDL_PIXELFORMAT_YV12 : pixelFormat;
 
 		texture = SDL_CreateTexture(renderer,
 			pixelFormat,
-			SDL_TEXTUREACCESS_STREAMING,
+			SDL_TEXTUREACCESS_STATIC,
 			width, height);
 		if (texture == nullptr)
 			throw gcnew Exception(String::Format("Error creating SDL texture {0}", gcnew String(SDL_GetError())));
@@ -100,9 +100,19 @@ namespace sdldisplay {
 		if (texture == nullptr)
 			CreateTexture();
 
-		// Assuming YUV at this point, TODO: Support RGB and friends
-		if (SDL_UpdateYUVTexture(texture, NULL, data[0], lineSizes[0], data[1], lineSizes[1], data[2], lineSizes[2]) != 0)
-			throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));
+		if (lineSizes[1] != 0)
+		{
+			if (SDL_UpdateYUVTexture(texture, NULL, data[0], lineSizes[0], data[1], lineSizes[1], data[2], lineSizes[2]) != 0)
+				throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));
+		}
+		else
+		{
+			/*if (SDL_UpdateTexture(texture, NULL, data[0], lineSizes[0]) != 0)
+				throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));*/
+
+			if (SDL_UpdateYUVTexture(texture, NULL, data[0], lineSizes[0], NULL, 0, NULL, 0) != 0)
+				throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));
+		}
 
 		if (SDL_RenderClear(renderer) != 0)
 			throw gcnew Exception(String::Format("Error clearing SDL renderer {0}", gcnew String(SDL_GetError())));
