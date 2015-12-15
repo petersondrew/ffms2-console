@@ -43,8 +43,8 @@ namespace TestClient
                 Console.WriteLine("Indexing file");
                 //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true))
                 //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true, videoCodec: "h264"))
-                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true))
-                if (!proxy.Index(@"E:\Videos\rgb_test.avi", useCached: true))
+                if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true))
+                //if (!proxy.Index(@"E:\Videos\rgb_test.avi", useCached: false))
                 {
                     Console.Error.WriteLine($"Error indexing file:{Environment.NewLine}{proxy.LastException}{Environment.NewLine}Press any key to quit");
                     Console.ReadKey();
@@ -64,6 +64,8 @@ namespace TestClient
                 {
                     if (!windowReady.Wait(TimeSpan.FromSeconds(60)))
                         return;
+
+                    proxy.SetFrameOutputFormat(pixelFormat: FramePixelFormat.YV12);
 
                     for (var frameNumber = 0; frameNumber < 500; frameNumber++)
                     {

@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Runtime.InteropServices;
 using ffms2.console.ipc;
 using FFMSSharp;
 using sdldisplay;
@@ -23,9 +22,9 @@ namespace ffms2.console
 
         Index index;
 
-        int framePixelFormat;
-
         int frameWidth, frameHeight;
+
+        int framePixelFormat;
 
         Resizer frameResizer;
 
@@ -35,9 +34,13 @@ namespace ffms2.console
 
         public bool Indexed { get; private set; }
 
-        static bool UseCachedIndex(bool useCache, string path) { return useCache && File.Exists(path); }
+        static bool UseCachedIndex(bool useCache, string path)
+        {
+            return useCache && File.Exists(path);
+        }
 
-        public bool Index(string file, bool useCached = true, string alternateIndexCacheFileLocation = null, string videoCodec = null)
+        public bool Index(string file, bool useCached = true, string alternateIndexCacheFileLocation = null,
+            string videoCodec = null)
         {
             Indexed = false;
             index = null;
@@ -57,7 +60,8 @@ namespace ffms2.console
             if (useCached && string.IsNullOrEmpty(alternateIndexCacheFileLocation))
                 alternateIndexCacheFileLocation = Path.Combine(fileDirectory, $"{Path.GetFileName(file)}.idx");
             else if (useCached && !File.Exists(alternateIndexCacheFileLocation))
-                throw new FileNotFoundException("Unable to locate supplied index cache file", alternateIndexCacheFileLocation);
+                throw new FileNotFoundException("Unable to locate supplied index cache file",
+                    alternateIndexCacheFileLocation);
 
             var indexFile = UseCachedIndex(useCached, alternateIndexCacheFileLocation)
                 ? alternateIndexCacheFileLocation
@@ -117,7 +121,7 @@ namespace ffms2.console
         }
 
         public event Action<IndexProgressEventArgs> IndexProgress;
-        
+
         void RaiseIndexProgress(IndexProgressEventArgs progress)
         {
             var handler = IndexProgress;
@@ -155,13 +159,33 @@ namespace ffms2.console
             }
         }
 
-        public void SetFrameOutputFormat(int width, int height, FrameResizeMethod resizeMethod)
+        static int CoercePixelFormat(FramePixelFormat pixelFormat)
         {
-            // BGRA is required for bitmap export
-            framePixelFormat = FFMS2.GetPixelFormat("bgra");
-            frameWidth = width;
-            frameHeight = height;
+            switch (pixelFormat)
+            {
+                case FramePixelFormat.YV12:
+                    return Display.PixelFormatYV12;
+                case FramePixelFormat.IYUV:
+                    return Display.PixelFormatIYUV;
+                case FramePixelFormat.RGB24:
+                    return Display.PixelFormatRGB24;
+                case FramePixelFormat.BGR24:
+                    return Display.PixelFormatBGR24;
+                default:
+                    throw new ArgumentException("Unsupported pixel format", nameof(pixelFormat));
+            }
+        }
+
+        public void SetFrameOutputFormat(int width = 0, int height = 0,
+            FrameResizeMethod resizeMethod = FrameResizeMethod.Bicubic,
+            FramePixelFormat pixelFormat = FramePixelFormat.YV12)
+        {
+            if (width > 0)
+                frameWidth = width;
+            if (height > 0)
+                frameHeight = height;
             frameResizer = CoerceResizer(resizeMethod);
+            framePixelFormat = CoercePixelFormat(pixelFormat);
         }
 
         void CheckTrack(int trackNumber)
@@ -193,10 +217,8 @@ namespace ffms2.console
                 var source = index.VideoSource(indexedFile, track, 0);
                 // TODO: Need to make this property per video source
                 var sampleFrame = source.GetFrame(0);
-                // BGRA is required for bitmap export
-                SetFrameOutputFormat(sampleFrame.EncodedResolution.Width, sampleFrame.EncodedResolution.Height, FrameResizeMethod.Bicubic);
-                //source.SetOutputFormat(new[] { framePixelFormat }, frameWidth, frameHeight, frameResizer);
-                source.SetOutputFormat(new[] { sampleFrame.EncodedPixelFormat }, frameWidth, frameHeight, frameResizer);
+                SetFrameOutputFormat(sampleFrame.EncodedResolution.Width, sampleFrame.EncodedResolution.Height);
+                source.SetOutputFormat(new[] {sampleFrame.EncodedPixelFormat}, frameWidth, frameHeight, frameResizer);
                 return source;
             });
 
@@ -245,7 +267,9 @@ namespace ffms2.console
             var track = GetTrack(trackNumber);
             var videoSource = GetVideoSource(trackNumber);
             // ((Time * 1000 * Frames.TB.Den) / Frames.TB.Num)
-            var frameInfo = track.GetFrameInfoFromPts((long) ((time * 1000 * videoSource.Track.TimeBaseDenominator) / videoSource.Track.TimeBaseNumerator));
+            var frameInfo =
+                track.GetFrameInfoFromPts(
+                    (long) ((time*1000*videoSource.Track.TimeBaseDenominator)/videoSource.Track.TimeBaseNumerator));
             var extractedFrame = videoSource.GetFrameByTime(time);
 
             return new Frame(frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
@@ -259,7 +283,7 @@ namespace ffms2.console
             {
                 InitDisplay(windowId);
                 display.SetSize(frame.Resolution.Width, frame.Resolution.Height);
-                //TODO: Set pixel format
+                display.SetPixelFormat(framePixelFormat);
 
                 byte*[] data =
                 {
@@ -270,7 +294,7 @@ namespace ffms2.console
                 };
 
                 fixed (byte** dataPtr = data)
-                fixed (int * lengthsPtr = frame.DataLengths.ToArray())
+                fixed (int* lengthsPtr = frame.DataLengths.ToArray())
                 {
                     display.ShowFrame(dataPtr, lengthsPtr);
                 }
@@ -288,7 +312,10 @@ namespace ffms2.console
                 throw new Exception("Unable to initialize FFMS2");
         }
 
-        public void Dispose() { Dispose(true); }
+        public void Dispose()
+        {
+            Dispose(true);
+        }
 
         void Dispose(bool disposing)
         {

@@ -70,6 +70,7 @@ namespace sdldisplay {
 
 	void Display::SetPixelFormat(int format)
 	{
+		if (pixelFormat == format) return;
 		pixelFormat = format;
 		CreateTexture();
 	}
@@ -100,18 +101,20 @@ namespace sdldisplay {
 		if (texture == nullptr)
 			CreateTexture();
 
-		if (lineSizes[1] != 0)
+		switch (pixelFormat)
 		{
-			if (SDL_UpdateYUVTexture(texture, NULL, data[0], lineSizes[0], data[1], lineSizes[1], data[2], lineSizes[2]) != 0)
-				throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));
-		}
-		else
-		{
-			/*if (SDL_UpdateTexture(texture, NULL, data[0], lineSizes[0]) != 0)
-				throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));*/
-
-			if (SDL_UpdateYUVTexture(texture, NULL, data[0], lineSizes[0], NULL, 0, NULL, 0) != 0)
-				throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));
+			case SDL_PIXELFORMAT_IYUV:
+			case SDL_PIXELFORMAT_YV12:
+				if (SDL_UpdateYUVTexture(texture, NULL, data[0], lineSizes[0], data[1], lineSizes[1], data[2], lineSizes[2]) != 0)
+					throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));
+				break;
+			case SDL_PIXELFORMAT_RGB24:
+			case SDL_PIXELFORMAT_BGR24:
+				if (SDL_UpdateTexture(texture, NULL, data[0], lineSizes[0]) != 0)
+					throw gcnew Exception(String::Format("Error updating SDL texture {0}", gcnew String(SDL_GetError())));
+				break;
+			default:
+				throw gcnew Exception(String::Format("Don't know how to handle pixel format {0}", pixelFormat));
 		}
 
 		if (SDL_RenderClear(renderer) != 0)

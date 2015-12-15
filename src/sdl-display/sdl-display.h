@@ -19,6 +19,27 @@ namespace sdldisplay {
 		int pixelFormat;
 		void CreateTexture();
 	public:
+		static property int PixelFormatIYUV
+		{
+		public:
+			int get() { return SDL_PIXELFORMAT_IYUV; }
+		}
+		static property int PixelFormatYV12
+		{
+		public:
+			int get() { return SDL_PIXELFORMAT_YV12; }
+		}
+		static property int PixelFormatRGB24
+		{
+		public:
+			int get() { return SDL_PIXELFORMAT_RGB24; }
+		}
+		static property int PixelFormatBGR24
+		{
+		public:
+			int get() { return SDL_PIXELFORMAT_BGR24; }
+		}
+
 		Display();
 		Display(IntPtr windowId);
 		~Display();
