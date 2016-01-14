@@ -34,11 +34,6 @@ namespace ffms2.console
 
         public bool Indexed { get; private set; }
 
-        static bool UseCachedIndex(bool useCache, string path)
-        {
-            return useCache && File.Exists(path);
-        }
-
         public bool Index(string file, bool useCached = true, string alternateIndexCacheFileLocation = null,
             string videoCodec = null)
         {
@@ -56,14 +51,7 @@ namespace ffms2.console
             if (string.IsNullOrEmpty(fileDirectory))
                 throw new DirectoryNotFoundException($"Unable to locate parent directory for file {file}");
 
-            // If we want to use cached index but don't supply a value, look for the default
-            if (useCached && string.IsNullOrEmpty(alternateIndexCacheFileLocation))
-                alternateIndexCacheFileLocation = Path.Combine(fileDirectory, $"{Path.GetFileName(file)}.idx");
-            else if (useCached && !File.Exists(alternateIndexCacheFileLocation))
-                throw new FileNotFoundException("Unable to locate supplied index cache file",
-                    alternateIndexCacheFileLocation);
-
-            var indexFile = UseCachedIndex(useCached, alternateIndexCacheFileLocation)
+            var indexFile = !string.IsNullOrEmpty(alternateIndexCacheFileLocation)
                 ? alternateIndexCacheFileLocation
                 : Path.Combine(fileDirectory,
                     $"{Path.GetFileName(file)}.idx");
