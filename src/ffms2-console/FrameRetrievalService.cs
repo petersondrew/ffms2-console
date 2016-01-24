@@ -24,7 +24,7 @@ namespace ffms2.console
 
         int frameWidth, frameHeight;
 
-        int framePixelFormat;
+        int displayPixelFormat;
 
         Resizer frameResizer;
 
@@ -147,7 +147,7 @@ namespace ffms2.console
             }
         }
 
-        static int CoercePixelFormat(FramePixelFormat pixelFormat)
+        static int CoerceDisplayPixelFormat(FramePixelFormat pixelFormat)
         {
             switch (pixelFormat)
             {
@@ -155,6 +155,8 @@ namespace ffms2.console
                     return Display.PixelFormatYV12;
                 case FramePixelFormat.IYUV:
                     return Display.PixelFormatIYUV;
+                case FramePixelFormat.YUY2:
+                    return Display.PixelFormatYUY2;
                 case FramePixelFormat.RGB24:
                     return Display.PixelFormatRGB24;
                 case FramePixelFormat.BGR24:
@@ -166,14 +168,15 @@ namespace ffms2.console
 
         public void SetFrameOutputFormat(int width = 0, int height = 0,
             FrameResizeMethod resizeMethod = FrameResizeMethod.Bicubic,
-            FramePixelFormat pixelFormat = FramePixelFormat.YV12)
+            FramePixelFormat pixelFormat = FramePixelFormat.None)
         {
             if (width > 0)
                 frameWidth = width;
             if (height > 0)
                 frameHeight = height;
             frameResizer = CoerceResizer(resizeMethod);
-            framePixelFormat = CoercePixelFormat(pixelFormat);
+            if (pixelFormat != FramePixelFormat.None)
+                displayPixelFormat = CoerceDisplayPixelFormat(pixelFormat);
         }
 
         void CheckTrack(int trackNumber)
@@ -206,7 +209,7 @@ namespace ffms2.console
                 // TODO: Need to make this property per video source
                 var sampleFrame = source.GetFrame(0);
                 SetFrameOutputFormat(sampleFrame.EncodedResolution.Width, sampleFrame.EncodedResolution.Height);
-                source.SetOutputFormat(new[] {sampleFrame.EncodedPixelFormat}, frameWidth, frameHeight, frameResizer);
+                source.SetOutputFormat(new[] { sampleFrame.EncodedPixelFormat }, frameWidth, frameHeight, frameResizer);
                 return source;
             });
 
@@ -225,7 +228,7 @@ namespace ffms2.console
             var extractedFrame = videoSource.GetFrame(frameNumber);
 
             return new Frame(frameNumber, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame, frameInfo.RepeatPicture,
-                extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data,
+                extractedFrame.FrameType, extractedFrame.EncodedResolution, extractedFrame.Data,
                 extractedFrame.DataLength);
         }
 
@@ -271,7 +274,7 @@ namespace ffms2.console
             {
                 InitDisplay(windowId);
                 display.SetSize(frame.Resolution.Width, frame.Resolution.Height);
-                display.SetPixelFormat(framePixelFormat);
+                display.SetPixelFormat(displayPixelFormat);
 
                 byte*[] data =
                 {
@@ -295,6 +298,7 @@ namespace ffms2.console
 
         public FrameRetrievalService()
         {
+            displayPixelFormat = CoerceDisplayPixelFormat(FramePixelFormat.YV12);
             FFMS2.Initialize();
             if (!FFMS2.Initialized)
                 throw new Exception("Unable to initialize FFMS2");

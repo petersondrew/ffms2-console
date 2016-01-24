@@ -39,8 +39,9 @@ namespace TestClient
                 Console.WriteLine("Indexing file");
                 //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true))
                 //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true, videoCodec: "h264"))
-                if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true, alternateIndexCacheFileLocation: @"E:\code\foo.idx"))
+                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true, alternateIndexCacheFileLocation: @"E:\code\foo.idx"))
                 //if (!proxy.Index(@"E:\Videos\rgb_test.avi", useCached: false))
+                if (!proxy.Index(@"E:\Videos\yuv411p.avi", useCached: false))
                 {
                     Console.Error.WriteLine($"Error indexing file:{Environment.NewLine}{proxy.LastException}{Environment.NewLine}Press any key to quit");
                     Console.ReadKey();
@@ -56,14 +57,14 @@ namespace TestClient
                 var windowReady = new ManualResetEventSlim(false);
 
                 // Set up remaining program logic and window event loop
-                var indexingTask = Task.Factory.StartNew(() =>
+                var indexingTask = Task.Factory.StartNew(async () =>
                 {
                     if (!windowReady.Wait(TimeSpan.FromSeconds(60)))
                         return;
 
                     proxy.SetFrameOutputFormat(pixelFormat: FramePixelFormat.YV12);
 
-                    for (var frameNumber = 0; frameNumber < 500; frameNumber++)
+                    for (var frameNumber = 0; frameNumber < 10; frameNumber++)
                     {
                         var frame = proxy.GetFrame(0, frameNumber);
                         Console.WriteLine($"Frame number: {frame.FrameNumber}");
@@ -72,10 +73,10 @@ namespace TestClient
                         Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
                         Console.WriteLine($"Frame position: {frame.FilePos}");
                         Console.WriteLine($"Frame resolution: {frame.Resolution}");
+                        await Task.Delay(100).ConfigureAwait(false);
                         // Ask to display image
                         proxy.DisplayFrame(frame, handle);
                     }
-
                 });
 
                 var formTask = Task.Factory.StartNew(() =>

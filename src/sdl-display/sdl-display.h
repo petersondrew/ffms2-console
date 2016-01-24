@@ -29,6 +29,11 @@ namespace sdldisplay {
 		public:
 			int get() { return SDL_PIXELFORMAT_YV12; }
 		}
+		static property int PixelFormatYUY2
+		{
+		public:
+			int get() { return SDL_PIXELFORMAT_YUY2; }
+		}
 		static property int PixelFormatRGB24
 		{
 		public:
