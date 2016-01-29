@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -41,7 +43,8 @@ namespace TestClient
                 //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true, videoCodec: "h264"))
                 //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true, alternateIndexCacheFileLocation: @"E:\code\foo.idx"))
                 //if (!proxy.Index(@"E:\Videos\rgb_test.avi", useCached: false))
-                if (!proxy.Index(@"E:\Videos\yuv411p.avi", useCached: false))
+                //if (!proxy.Index(@"E:\Videos\yuv411p.avi", useCached: false))
+                if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\10-3-14 for DREW\For_spectrum_view.avi", useCached: false))
                 {
                     Console.Error.WriteLine($"Error indexing file:{Environment.NewLine}{proxy.LastException}{Environment.NewLine}Press any key to quit");
                     Console.ReadKey();
@@ -64,9 +67,20 @@ namespace TestClient
 
                     proxy.SetFrameOutputFormat(pixelFormat: FramePixelFormat.YV12);
 
-                    for (var frameNumber = 0; frameNumber < 10; frameNumber++)
+                    var frames = new List<IFrame>();
+                    
+                    for (var frameNumber = 0; frameNumber <= 100; frameNumber++)
                     {
-                        var frame = proxy.GetFrame(0, frameNumber);
+                        frames.Add(proxy.GetFrame(0, frameNumber));
+                    }
+
+                    var timer = new Stopwatch();
+                    timer.Start();
+
+                    for (var frameNumber = 0; frameNumber <= 100; frameNumber++)
+                    {
+                        //var frame = proxy.GetFrame(0, frameNumber);
+                        var frame = frames[frameNumber];
                         Console.WriteLine($"Frame number: {frame.FrameNumber}");
                         Console.WriteLine($"Frame type: {frame.FrameType}");
                         Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
@@ -77,6 +91,28 @@ namespace TestClient
                         // Ask to display image
                         proxy.DisplayFrame(frame, handle);
                     }
+
+                    var forwards = timer.Elapsed;
+                    timer.Restart();
+
+                    for (var frameNumber = 100; frameNumber >= 0; frameNumber--)
+                    {
+                        //var frame = proxy.GetFrame(0, frameNumber);
+                        var frame = frames[frameNumber];
+                        Console.WriteLine($"Frame number: {frame.FrameNumber}");
+                        Console.WriteLine($"Frame type: {frame.FrameType}");
+                        Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
+                        Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
+                        Console.WriteLine($"Frame position: {frame.FilePos}");
+                        Console.WriteLine($"Frame resolution: {frame.Resolution}");
+                        await Task.Delay(100).ConfigureAwait(false);
+                        // Ask to display image
+                        proxy.DisplayFrame(frame, handle);
+                    }
+
+                    var backwards = timer.Elapsed;
+
+                    Console.WriteLine($"Forwards: {forwards}; Backwards: {backwards}; Delta: {backwards - forwards}");
                 });
 
                 var formTask = Task.Factory.StartNew(() =>

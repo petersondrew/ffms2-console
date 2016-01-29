@@ -209,27 +209,42 @@ namespace ffms2.console
                 // TODO: Need to make this property per video source
                 var sampleFrame = source.GetFrame(0);
                 SetFrameOutputFormat(sampleFrame.EncodedResolution.Width, sampleFrame.EncodedResolution.Height);
-                source.SetOutputFormat(new[] { sampleFrame.EncodedPixelFormat }, frameWidth, frameHeight, frameResizer);
+                source.SetOutputFormat(new[] {sampleFrame.EncodedPixelFormat}, frameWidth, frameHeight, frameResizer);
                 return source;
             });
 
             return videoSource;
         }
 
-        public IFrame GetFrame(int trackNumber, int frameNumber)
+        InteropFrameData GetFrameData(int trackNumber, int frameNumber)
         {
             var track = GetTrack(trackNumber);
             if (frameNumber < 0 || frameNumber >= track.NumberOfFrames)
                 throw new ArgumentOutOfRangeException(nameof(frameNumber),
                     $"Frame must be between 0 and {track.NumberOfFrames - 1}");
 
-            var frameInfo = track.GetFrameInfo(frameNumber);
             var videoSource = GetVideoSource(trackNumber);
-            var extractedFrame = videoSource.GetFrame(frameNumber);
+            return new InteropFrameData(track.GetFrameInfo(frameNumber), videoSource.GetFrame(frameNumber));
+        }
 
-            return new Frame(frameNumber, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame, frameInfo.RepeatPicture,
-                extractedFrame.FrameType, extractedFrame.EncodedResolution, extractedFrame.Data,
-                extractedFrame.DataLength);
+        public IFrame GetFrame(int trackNumber, int frameNumber)
+        {
+            var frameData = GetFrameData(trackNumber, frameNumber);
+
+            return new Frame(trackNumber, frameNumber, frameData.FrameInfo.PTS, frameData.FrameInfo.FilePos,
+                frameData.FrameInfo.KeyFrame, frameData.FrameInfo.RepeatPicture,
+                frameData.Frame.FrameType, frameData.Frame.EncodedResolution);
+        }
+
+        internal InternalFrame GetFrameInternal(int trackNumber, int frameNumber)
+        {
+            var frameData = GetFrameData(trackNumber, frameNumber);
+
+            var frame = new InternalFrame(trackNumber, frameNumber, frameData.FrameInfo.PTS, frameData.FrameInfo.FilePos,
+                frameData.FrameInfo.KeyFrame, frameData.FrameInfo.RepeatPicture,
+                frameData.Frame.FrameType, frameData.Frame.EncodedResolution);
+            frame.SetData(frameData.Frame.Data, frameData.Frame.DataLength);
+            return frame;
         }
 
         public List<IFrame> GetFrameInfos(int trackNumber)
@@ -237,7 +252,9 @@ namespace ffms2.console
             var track = GetTrack(trackNumber);
             var infos = track.GetFrameInfos();
 
-            return new List<IFrame>(infos.Select(i => new Frame(i.Frame, i.PTS, i.FilePos, i.KeyFrame, i.RepeatPicture)));
+            return
+                new List<IFrame>(
+                    infos.Select(i => new Frame(trackNumber, i.Frame, i.PTS, i.FilePos, i.KeyFrame, i.RepeatPicture)));
         }
 
         public IFrame GetFrameAtPosition(int trackNumber, long position)
@@ -248,9 +265,8 @@ namespace ffms2.console
             var videoSource = GetVideoSource(trackNumber);
             var extractedFrame = videoSource.GetFrameByPosition(position);
 
-            return new Frame(frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
-                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data,
-                extractedFrame.DataLength);
+            return new Frame(trackNumber, frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
+                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution);
         }
 
         public IFrame GetFrameAtTime(int trackNumber, double time)
@@ -263,29 +279,29 @@ namespace ffms2.console
                     (long) ((time*1000*videoSource.Track.TimeBaseDenominator)/videoSource.Track.TimeBaseNumerator));
             var extractedFrame = videoSource.GetFrameByTime(time);
 
-            return new Frame(frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
-                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution, extractedFrame.Data,
-                extractedFrame.DataLength);
+            return new Frame(trackNumber, frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
+                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution);
         }
 
         public unsafe void DisplayFrame(IFrame frame, IntPtr windowId)
         {
             try
             {
+                var @internal = GetFrameInternal(frame.TrackNumber, frame.FrameNumber);
                 InitDisplay(windowId);
                 display.SetSize(frame.Resolution.Width, frame.Resolution.Height);
                 display.SetPixelFormat(displayPixelFormat);
 
                 byte*[] data =
                 {
-                    (byte*) frame.Data[0].ToPointer(),
-                    (byte*) frame.Data[1].ToPointer(),
-                    (byte*) frame.Data[2].ToPointer(),
-                    (byte*) frame.Data[3].ToPointer()
+                    (byte*) @internal.Data[0].ToPointer(),
+                    (byte*) @internal.Data[1].ToPointer(),
+                    (byte*) @internal.Data[2].ToPointer(),
+                    (byte*) @internal.Data[3].ToPointer()
                 };
 
                 fixed (byte** dataPtr = data)
-                fixed (int* lengthsPtr = frame.DataLengths.ToArray())
+                fixed (int* lengthsPtr = @internal.DataLengths.ToArray())
                 {
                     display.ShowFrame(dataPtr, lengthsPtr);
                 }
