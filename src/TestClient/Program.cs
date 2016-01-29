@@ -60,54 +60,50 @@ namespace TestClient
                 var windowReady = new ManualResetEventSlim(false);
 
                 // Set up remaining program logic and window event loop
-                var indexingTask = Task.Factory.StartNew(async () =>
+                var indexingTask = Task.Factory.StartNew(() =>
                 {
                     if (!windowReady.Wait(TimeSpan.FromSeconds(60)))
                         return;
 
+                    proxy.SetSeekHandling(SeekHandling.Unsafe);
                     proxy.SetFrameOutputFormat(pixelFormat: FramePixelFormat.YV12);
 
-                    var frames = new List<IFrame>();
-                    
-                    for (var frameNumber = 0; frameNumber <= 100; frameNumber++)
-                    {
-                        frames.Add(proxy.GetFrame(0, frameNumber));
-                    }
+                    var frames = proxy.GetFrames(0);
 
                     var timer = new Stopwatch();
                     timer.Start();
 
-                    for (var frameNumber = 0; frameNumber <= 100; frameNumber++)
+                    for (var frameNumber = 0; frameNumber <= 1000; frameNumber++)
                     {
                         //var frame = proxy.GetFrame(0, frameNumber);
                         var frame = frames[frameNumber];
                         Console.WriteLine($"Frame number: {frame.FrameNumber}");
-                        Console.WriteLine($"Frame type: {frame.FrameType}");
                         Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
                         Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
                         Console.WriteLine($"Frame position: {frame.FilePos}");
-                        Console.WriteLine($"Frame resolution: {frame.Resolution}");
-                        await Task.Delay(100).ConfigureAwait(false);
+                        //await Task.Delay(100).ConfigureAwait(false);
                         // Ask to display image
-                        proxy.DisplayFrame(frame, handle);
+                        frame = proxy.DisplayFrame(frame, handle);
+                        Console.WriteLine($"Frame type: {frame.FrameType}");
+                        Console.WriteLine($"Frame resolution: {frame.Resolution}");
                     }
 
                     var forwards = timer.Elapsed;
                     timer.Restart();
 
-                    for (var frameNumber = 100; frameNumber >= 0; frameNumber--)
+                    for (var frameNumber = 1000; frameNumber >= 0; frameNumber--)
                     {
                         //var frame = proxy.GetFrame(0, frameNumber);
                         var frame = frames[frameNumber];
                         Console.WriteLine($"Frame number: {frame.FrameNumber}");
-                        Console.WriteLine($"Frame type: {frame.FrameType}");
                         Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
                         Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
                         Console.WriteLine($"Frame position: {frame.FilePos}");
-                        Console.WriteLine($"Frame resolution: {frame.Resolution}");
-                        await Task.Delay(100).ConfigureAwait(false);
+                        //await Task.Delay(100).ConfigureAwait(false);
                         // Ask to display image
-                        proxy.DisplayFrame(frame, handle);
+                        frame = proxy.DisplayFrame(frame, handle);
+                        Console.WriteLine($"Frame type: {frame.FrameType}");
+                        Console.WriteLine($"Frame resolution: {frame.Resolution}");
                     }
 
                     var backwards = timer.Elapsed;
@@ -129,7 +125,7 @@ namespace TestClient
 
                 Task.WaitAll(formTask, indexingTask);
 
-                //foreach (var frame in proxy.GetFrameInfos(0))
+                //foreach (var frame in proxy.GetFrames(0))
                 //{
                 //    Console.WriteLine($"Frame number: {frame.FrameNumber}");
                 //    Console.WriteLine($"Frame type: {frame.FrameType}");

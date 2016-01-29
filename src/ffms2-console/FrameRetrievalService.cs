@@ -30,6 +30,8 @@ namespace ffms2.console
 
         Display display;
 
+        SeekMode seekMode;
+
         public Exception LastException { get; private set; }
 
         public bool Indexed { get; private set; }
@@ -149,6 +151,37 @@ namespace ffms2.console
 
         static int CoerceDisplayPixelFormat(FramePixelFormat pixelFormat)
         {
+            // TODO: Look! FFMS did some of the homework for us! (implement this)
+            /*
+            static AVPixelFormat CSNameToPIXFMT(const char *CSName, AVPixelFormat Default) {
+	            if (!CSName)
+		            return FFMS_PIX_FMT(NONE);
+	            std::string s = CSName;
+	            std::transform(s.begin(), s.end(), s.begin(), toupper);
+	            if (s == "")
+		            return Default;
+	            if (s == "YUV9")
+		            return FFMS_PIX_FMT(YUV410P);
+	            if (s == "YV411")
+		            return FFMS_PIX_FMT(YUV411P);
+	            if (s == "YV12")
+		            return FFMS_PIX_FMT(YUV420P);
+	            if (s == "YV16")
+		            return FFMS_PIX_FMT(YUV422P);
+	            if (s == "YV24")
+		            return FFMS_PIX_FMT(YUV444P);
+	            if (s == "Y8")
+		            return FFMS_PIX_FMT(GRAY8);
+	            if (s == "YUY2")
+		            return FFMS_PIX_FMT(YUYV422);
+	            if (s == "RGB24")
+		            return FFMS_PIX_FMT(BGR24);
+	            if (s == "RGB32")
+		            return FFMS_PIX_FMT(RGB32);
+
+	            return FFMS_PIX_FMT(NONE);
+            }
+            */
             switch (pixelFormat)
             {
                 case FramePixelFormat.YV12:
@@ -166,9 +199,31 @@ namespace ffms2.console
             }
         }
 
-        public void SetFrameOutputFormat(int width = 0, int height = 0,
-            FrameResizeMethod resizeMethod = FrameResizeMethod.Bicubic,
-            FramePixelFormat pixelFormat = FramePixelFormat.None)
+        public void SetSeekHandling(SeekHandling mode)
+        {
+            switch (mode)
+            {
+                case SeekHandling.LinearNoRewind:
+                    seekMode = SeekMode.LinearNoRewind;
+                    break;
+                case SeekHandling.Linear:
+                    seekMode = SeekMode.Linear;
+                    break;
+                case SeekHandling.Normal:
+                    seekMode = SeekMode.Normal;
+                    break;
+                case SeekHandling.Unsafe:
+                    seekMode = SeekMode.Unsafe;
+                    break;
+                case SeekHandling.Aggressive:
+                    seekMode = SeekMode.Aggressive;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
+            }
+        }
+
+        public void SetFrameOutputFormat(int width = 0, int height = 0, FrameResizeMethod resizeMethod = FrameResizeMethod.Bicubic, FramePixelFormat pixelFormat = FramePixelFormat.None)
         {
             if (width > 0)
                 frameWidth = width;
@@ -185,8 +240,7 @@ namespace ffms2.console
                 throw new InvalidOperationException("No index available");
 
             if (trackNumber < 0 || trackNumber >= index.NumberOfTracks)
-                throw new ArgumentOutOfRangeException(nameof(trackNumber),
-                    $"Track must be between 0 and {index.NumberOfTracks - 1}");
+                throw new ArgumentOutOfRangeException(nameof(trackNumber), $"Track must be between 0 and {index.NumberOfTracks - 1}");
         }
 
         Track GetTrack(int trackNumber)
@@ -205,7 +259,7 @@ namespace ffms2.console
             CheckTrack(trackNumber);
             var videoSource = videoSources.GetOrAdd(trackNumber, track =>
             {
-                var source = index.VideoSource(indexedFile, track, 0);
+                var source = index.VideoSource(indexedFile, track, 0, seekMode);
                 // TODO: Need to make this property per video source
                 var sampleFrame = source.GetFrame(0);
                 SetFrameOutputFormat(sampleFrame.EncodedResolution.Width, sampleFrame.EncodedResolution.Height);
@@ -220,8 +274,7 @@ namespace ffms2.console
         {
             var track = GetTrack(trackNumber);
             if (frameNumber < 0 || frameNumber >= track.NumberOfFrames)
-                throw new ArgumentOutOfRangeException(nameof(frameNumber),
-                    $"Frame must be between 0 and {track.NumberOfFrames - 1}");
+                throw new ArgumentOutOfRangeException(nameof(frameNumber), $"Frame must be between 0 and {track.NumberOfFrames - 1}");
 
             var videoSource = GetVideoSource(trackNumber);
             return new InteropFrameData(track.GetFrameInfo(frameNumber), videoSource.GetFrame(frameNumber));
@@ -229,32 +282,30 @@ namespace ffms2.console
 
         public IFrame GetFrame(int trackNumber, int frameNumber)
         {
-            var frameData = GetFrameData(trackNumber, frameNumber);
+            var track = GetTrack(trackNumber);
+            if (frameNumber < 0 || frameNumber >= track.NumberOfFrames)
+                throw new ArgumentOutOfRangeException(nameof(frameNumber), $"Frame must be between 0 and {track.NumberOfFrames - 1}");
 
-            return new Frame(trackNumber, frameNumber, frameData.FrameInfo.PTS, frameData.FrameInfo.FilePos,
-                frameData.FrameInfo.KeyFrame, frameData.FrameInfo.RepeatPicture,
-                frameData.Frame.FrameType, frameData.Frame.EncodedResolution);
+            var frameInfo = track.GetFrameInfo(frameNumber);
+
+            return new Frame(trackNumber, frameNumber, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame, frameInfo.RepeatPicture);
         }
 
         internal InternalFrame GetFrameInternal(int trackNumber, int frameNumber)
         {
             var frameData = GetFrameData(trackNumber, frameNumber);
 
-            var frame = new InternalFrame(trackNumber, frameNumber, frameData.FrameInfo.PTS, frameData.FrameInfo.FilePos,
-                frameData.FrameInfo.KeyFrame, frameData.FrameInfo.RepeatPicture,
-                frameData.Frame.FrameType, frameData.Frame.EncodedResolution);
+            var frame = new InternalFrame(trackNumber, frameNumber, frameData.FrameInfo.PTS, frameData.FrameInfo.FilePos, frameData.FrameInfo.KeyFrame, frameData.FrameInfo.RepeatPicture, frameData.Frame.FrameType, frameData.Frame.EncodedResolution);
             frame.SetData(frameData.Frame.Data, frameData.Frame.DataLength);
             return frame;
         }
 
-        public List<IFrame> GetFrameInfos(int trackNumber)
+        public List<IFrame> GetFrames(int trackNumber)
         {
             var track = GetTrack(trackNumber);
             var infos = track.GetFrameInfos();
 
-            return
-                new List<IFrame>(
-                    infos.Select(i => new Frame(trackNumber, i.Frame, i.PTS, i.FilePos, i.KeyFrame, i.RepeatPicture)));
+            return new List<IFrame>(infos.Select(i => new Frame(trackNumber, i.Frame, i.PTS, i.FilePos, i.KeyFrame, i.RepeatPicture)));
         }
 
         public IFrame GetFrameAtPosition(int trackNumber, long position)
@@ -262,11 +313,8 @@ namespace ffms2.console
             var track = GetTrack(trackNumber);
 
             var frameInfo = track.GetFrameInfoFromPosition(position);
-            var videoSource = GetVideoSource(trackNumber);
-            var extractedFrame = videoSource.GetFrameByPosition(position);
 
-            return new Frame(trackNumber, frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
-                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution);
+            return new Frame(trackNumber, frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame, frameInfo.RepeatPicture);
         }
 
         public IFrame GetFrameAtTime(int trackNumber, double time)
@@ -274,30 +322,24 @@ namespace ffms2.console
             var track = GetTrack(trackNumber);
             var videoSource = GetVideoSource(trackNumber);
             // ((Time * 1000 * Frames.TB.Den) / Frames.TB.Num)
-            var frameInfo =
-                track.GetFrameInfoFromPts(
-                    (long) ((time*1000*videoSource.Track.TimeBaseDenominator)/videoSource.Track.TimeBaseNumerator));
-            var extractedFrame = videoSource.GetFrameByTime(time);
+            var frameInfo = track.GetFrameInfoFromPts((long) ((time*1000*videoSource.Track.TimeBaseDenominator)/videoSource.Track.TimeBaseNumerator));
 
-            return new Frame(trackNumber, frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame,
-                frameInfo.RepeatPicture, extractedFrame.FrameType, extractedFrame.Resolution);
+            return new Frame(trackNumber, frameInfo.Frame, frameInfo.PTS, frameInfo.FilePos, frameInfo.KeyFrame, frameInfo.RepeatPicture);
         }
 
-        public unsafe void DisplayFrame(IFrame frame, IntPtr windowId)
+        public unsafe IFrame DisplayFrame(IFrame frame, IntPtr windowId)
         {
+            InternalFrame @internal = null;
             try
             {
-                var @internal = GetFrameInternal(frame.TrackNumber, frame.FrameNumber);
+                @internal = GetFrameInternal(frame.TrackNumber, frame.FrameNumber);
                 InitDisplay(windowId);
-                display.SetSize(frame.Resolution.Width, frame.Resolution.Height);
+                display.SetSize(@internal.Resolution.Width, @internal.Resolution.Height);
                 display.SetPixelFormat(displayPixelFormat);
 
                 byte*[] data =
                 {
-                    (byte*) @internal.Data[0].ToPointer(),
-                    (byte*) @internal.Data[1].ToPointer(),
-                    (byte*) @internal.Data[2].ToPointer(),
-                    (byte*) @internal.Data[3].ToPointer()
+                    (byte*) @internal.Data[0].ToPointer(), (byte*) @internal.Data[1].ToPointer(), (byte*) @internal.Data[2].ToPointer(), (byte*) @internal.Data[3].ToPointer()
                 };
 
                 fixed (byte** dataPtr = data)
@@ -308,8 +350,9 @@ namespace ffms2.console
             }
             catch (Exception)
             {
-                // ignored
+                // Ignored
             }
+            return @internal == null ? frame : (Frame) @internal;
         }
 
         public FrameRetrievalService()
