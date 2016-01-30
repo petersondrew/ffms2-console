@@ -32,7 +32,7 @@ namespace sdldisplay {
 
 		SDL_SetWindowTitle(window, "Grabbed by SDL!");
 
-		renderer = SDL_CreateRenderer(window, -1, 0);
+		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 		if (renderer == nullptr)
 			throw gcnew Exception(String::Format("Error creating SDL renderer {0}", gcnew String(SDL_GetError())));
 	}
@@ -118,9 +118,9 @@ namespace sdldisplay {
 		}
 
 		if (SDL_RenderClear(renderer) != 0)
-			throw gcnew Exception(String::Format("Error clearing SDL renderer {0}", gcnew String(SDL_GetError())));
+			throw gcnew FatalDisplayException(String::Format("Error clearing SDL renderer {0}", gcnew String(SDL_GetError())));
 		if (SDL_RenderCopy(renderer, texture, NULL, NULL) != 0)
-			throw gcnew Exception(String::Format("Error copying SDL texture to renderer {0}", gcnew String(SDL_GetError())));
+			throw gcnew FatalDisplayException(String::Format("Error copying SDL texture to renderer {0}", gcnew String(SDL_GetError())));
 		SDL_RenderPresent(renderer);
 	}
 }

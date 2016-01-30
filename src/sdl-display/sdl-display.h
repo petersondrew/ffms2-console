@@ -4,8 +4,20 @@
 #include "SDL.h"
 
 using namespace System;
+using namespace System::Runtime::Serialization;
 
 namespace sdldisplay {
+	[Serializable]
+	public ref class FatalDisplayException : ApplicationException
+	{
+	public:
+		FatalDisplayException(String^ message) : ApplicationException(message)
+		{
+		}
+		FatalDisplayException(SerializationInfo^ info, StreamingContext context) : ApplicationException(info, context)
+		{
+		}
+	};
 
 	public ref class Display
 	{

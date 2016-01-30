@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.Remoting;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ffms2.console.ipc;
+using ffms2.console.ipc.Exceptions;
 using Zyan.Communication;
 using Zyan.Communication.Protocols.Ipc;
 
@@ -13,6 +15,15 @@ namespace TestClient
     internal static class Program
     {
         static readonly object ConsoleLock = new object();
+
+        static bool CheckForRecoverableFFMSException(Exception exception)
+        {
+            if (!(exception.InnerException is FFMSException))
+                return false;
+            var ffmsException = exception.InnerException;
+            return ffmsException is FrameDisplayException || ffmsException is FrameRetrievalException ||
+                   ffmsException is IndexAccessException;
+        }
 
         [STAThread]
         static void Main()
@@ -24,7 +35,9 @@ namespace TestClient
 #else
             //var pipeName = Guid.NewGuid().ToString("N");
             var pipeName = "localhost";
-            var server = Process.Start(@"E:\Code\ffms2-console\src\ffms2-console\bin\x86\Release\ffms2.console.exe", pipeName);
+            Process server = null;
+            if (!Debugger.IsAttached)
+                server = Process.Start(@"E:\Code\ffms2-console\src\ffms2-console\bin\x86\Release\ffms2.console.exe", pipeName);
 #endif
             Thread.Sleep(TimeSpan.FromSeconds(2));
             var protocol = new IpcBinaryClientProtocolSetup();
@@ -39,17 +52,25 @@ namespace TestClient
                 proxy.IndexProgress += ProxyOnIndexProgress;
 
                 Console.WriteLine("Indexing file");
-                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true))
-                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true, videoCodec: "h264"))
-                //if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true, alternateIndexCacheFileLocation: @"E:\code\foo.idx"))
-                //if (!proxy.Index(@"E:\Videos\rgb_test.avi", useCached: false))
-                //if (!proxy.Index(@"E:\Videos\yuv411p.avi", useCached: false))
-                if (!proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\10-3-14 for DREW\For_spectrum_view.avi", useCached: false))
+                try
                 {
-                    Console.Error.WriteLine($"Error indexing file:{Environment.NewLine}{proxy.LastException}{Environment.NewLine}Press any key to quit");
+                    //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true);
+                    //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true, videoCodec: "h264");
+                    //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true, alternateIndexCacheFileLocation: @"E:\code\foo.idx");
+                    //proxy.Index(@"E:\Videos\rgb_test.avi", useCached: false);
+                    //proxy.Index(@"E:\Videos\yuv411p.avi", useCached: false);
+                    //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\10-3-14 for DREW\For_spectrum_view.avi",
+                    //    useCached: false);
+                    proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\ffms problem files\crashes.irf",
+                        useCached: false);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error indexing file:{Environment.NewLine}{ex}{Environment.NewLine}Press any key to quit");
                     Console.ReadKey();
                     return;
                 }
+
                 ProxyOnIndexProgress(new IndexProgressEventArgs(1, 1));
                 Console.WriteLine();
                 Console.WriteLine();
@@ -65,50 +86,77 @@ namespace TestClient
                     if (!windowReady.Wait(TimeSpan.FromSeconds(60)))
                         return;
 
-                    proxy.SetSeekHandling(SeekHandling.Unsafe);
-                    proxy.SetFrameOutputFormat(pixelFormat: FramePixelFormat.YV12);
-
-                    var frames = proxy.GetFrames(0);
-
-                    var timer = new Stopwatch();
-                    timer.Start();
-
-                    for (var frameNumber = 0; frameNumber <= 1000; frameNumber++)
+                    try
                     {
-                        //var frame = proxy.GetFrame(0, frameNumber);
-                        var frame = frames[frameNumber];
-                        Console.WriteLine($"Frame number: {frame.FrameNumber}");
-                        Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
-                        Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
-                        Console.WriteLine($"Frame position: {frame.FilePos}");
-                        //await Task.Delay(100).ConfigureAwait(false);
-                        // Ask to display image
-                        frame = proxy.DisplayFrame(frame, handle);
-                        Console.WriteLine($"Frame type: {frame.FrameType}");
-                        Console.WriteLine($"Frame resolution: {frame.Resolution}");
+                        proxy.SetSeekHandling(SeekHandling.Unsafe);
+                        proxy.SetFrameOutputFormat(pixelFormat: FramePixelFormat.YV12);
+
+                        var frames = proxy.GetFrames(0);
+
+                        var timer = new Stopwatch();
+                        timer.Start();
+
+                        for (var frameNumber = 0; frameNumber <= 1000; frameNumber++)
+                        {
+                            try
+                            {
+                                //var frame = proxy.GetFrame(0, frameNumber);
+                                var frame = frames[frameNumber];
+                                Console.WriteLine($"Frame number: {frame.FrameNumber}");
+                                Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
+                                Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
+                                Console.WriteLine($"Frame position: {frame.FilePos}");
+                                //await Task.Delay(100).ConfigureAwait(false);
+                                // Ask to display image
+                                frame = proxy.DisplayFrame(frame, handle);
+                                Console.WriteLine($"Frame type: {frame?.FrameType}");
+                                Console.WriteLine($"Frame resolution: {frame?.Resolution}");
+                            }
+                            catch (Exception remoteException)
+                            {
+                                if (!CheckForRecoverableFFMSException(remoteException))
+                                    throw;
+                            }
+                        }
+
+                        var forwards = timer.Elapsed;
+                        timer.Restart();
+
+                        for (var frameNumber = 1000; frameNumber >= 0; frameNumber--)
+                        {
+                            try
+                            {
+                                //var frame = proxy.GetFrame(0, frameNumber);
+                                var frame = frames[frameNumber];
+                                Console.WriteLine($"Frame number: {frame.FrameNumber}");
+                                Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
+                                Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
+                                Console.WriteLine($"Frame position: {frame.FilePos}");
+                                //await Task.Delay(100).ConfigureAwait(false);
+                                // Ask to display image
+                                frame = proxy.DisplayFrame(frame, handle);
+                                Console.WriteLine($"Frame type: {frame?.FrameType}");
+                                Console.WriteLine($"Frame resolution: {frame?.Resolution}");
+                            }
+                            catch (Exception remoteException)
+                            {
+                                if (!CheckForRecoverableFFMSException(remoteException))
+                                    throw;
+                            }
+                        }
+
+                        var backwards = timer.Elapsed;
+
+                        Console.WriteLine($"Forwards: {forwards}; Backwards: {backwards}; Delta: {backwards - forwards}");
+                    }
+                    catch (Exception ex)
+                    {
+                        var ffmsException = ex.InnerException as FFMSException;
+                        Console.Error.WriteLine(ffmsException == null
+                            ? $"An error ocurred:{Environment.NewLine}{ex}"
+                            : $"An error ocurred in ffms-console:{Environment.NewLine}{ffmsException}");
                     }
 
-                    var forwards = timer.Elapsed;
-                    timer.Restart();
-
-                    for (var frameNumber = 1000; frameNumber >= 0; frameNumber--)
-                    {
-                        //var frame = proxy.GetFrame(0, frameNumber);
-                        var frame = frames[frameNumber];
-                        Console.WriteLine($"Frame number: {frame.FrameNumber}");
-                        Console.WriteLine($"Frame keyframe: {frame.KeyFrame}");
-                        Console.WriteLine($"Frame PTS: {TimeSpan.FromMilliseconds(frame.PTS)}");
-                        Console.WriteLine($"Frame position: {frame.FilePos}");
-                        //await Task.Delay(100).ConfigureAwait(false);
-                        // Ask to display image
-                        frame = proxy.DisplayFrame(frame, handle);
-                        Console.WriteLine($"Frame type: {frame.FrameType}");
-                        Console.WriteLine($"Frame resolution: {frame.Resolution}");
-                    }
-
-                    var backwards = timer.Elapsed;
-
-                    Console.WriteLine($"Forwards: {forwards}; Backwards: {backwards}; Delta: {backwards - forwards}");
                 });
 
                 var formTask = Task.Factory.StartNew(() =>

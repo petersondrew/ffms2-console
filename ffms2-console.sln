@@ -8,6 +8,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FFMSsharp", "..\FFMSSharp\FFMSsharp\FFMSsharp.csproj", "{303CA7DC-1B7E-45BE-9A90-A37D72CE4791}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestClient", "src\TestClient\TestClient.csproj", "{B841B9D1-C817-409F-B52E-C2A00E7EBC25}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A6B1C17D-9E00-43CF-A215-9D75C950A8E8} = {A6B1C17D-9E00-43CF-A215-9D75C950A8E8}
+		{303CA7DC-1B7E-45BE-9A90-A37D72CE4791} = {303CA7DC-1B7E-45BE-9A90-A37D72CE4791}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ffms2-console-ipc", "..\ffms2-console-ipc\src\ffms2-console-ipc\ffms2-console-ipc.csproj", "{8008A426-5C43-44DD-9AF1-E73B5D058990}"
 EndProject
