@@ -10,6 +10,9 @@ using ffms2.console.ipc.Exceptions;
 using FFMSSharp;
 using sdldisplay;
 using Frame = ffms2.console.ipc.Frame;
+using FFMSTrack = FFMSSharp.Track;
+using FFMSTrackType = FFMSSharp.TrackType;
+using Track = ffms2.console.ipc.Track;
 
 namespace ffms2.console
 {
@@ -233,6 +236,22 @@ namespace ffms2.console
                 displayPixelFormat = CoerceDisplayPixelFormat(pixelFormat);
         }
 
+        public List<ITrack> GetTracks()
+        {
+            if (!Indexed || index == null)
+                throw new InvalidOperationException("No index available");
+
+            var tracks = new List<ITrack>();
+            for (var t = 0; t < index.NumberOfTracks; t++)
+            {
+                var ffmsTrack = index.GetTrack(t);
+                if (ffmsTrack == null) continue;
+                tracks.Add(new Track(t, (ipc.TrackType) ffmsTrack.TrackType, ffmsTrack.NumberOfFrames,
+                    new TimeBase(ffmsTrack.TimeBaseNumerator, ffmsTrack.TimeBaseDenominator)));
+            }
+            return tracks;
+        }
+
         void CheckTrack(int trackNumber)
         {
             if (!Indexed || index == null)
@@ -243,14 +262,14 @@ namespace ffms2.console
                     $"Track must be between 0 and {index.NumberOfTracks - 1}");
         }
 
-        Track GetTrack(int trackNumber)
+        FFMSTrack GetTrack(int trackNumber)
         {
             try
             {
                 CheckTrack(trackNumber);
 
                 var track = index.GetTrack(trackNumber);
-                if (track.TrackType != TrackType.Video)
+                if (track.TrackType != FFMSTrackType.Video)
                     throw new InvalidOperationException("Specified track is not a video track");
 
                 return track;

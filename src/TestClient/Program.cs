@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.Remoting;
 using System.Threading;
 using System.Threading.Tasks;
@@ -56,13 +57,14 @@ namespace TestClient
                 {
                     //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true);
                     //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\requires force h264.ave", useCached: true, videoCodec: "h264");
-                    //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: true, alternateIndexCacheFileLocation: @"E:\code\foo.idx");
+                    proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\Back Entrance-12-17-14-330-600.avi", useCached: false, alternateIndexCacheFileLocation: @"E:\code\foo.idx");
                     //proxy.Index(@"E:\Videos\rgb_test.avi", useCached: false);
                     //proxy.Index(@"E:\Videos\yuv411p.avi", useCached: false);
                     //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\10-3-14 for DREW\For_spectrum_view.avi",
                     //    useCached: false);
-                    proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\ffms problem files\crashes.irf",
-                        useCached: false);
+                    //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\ffms problem files\crashes.irf",
+                    //    useCached: false);
+                    //proxy.Index(@"E:\Code\ForensicVideoSolutions\Test Files\ffms problem files\doesnt index.MTS", useCached: false);
                 }
                 catch (Exception ex)
                 {
@@ -91,7 +93,16 @@ namespace TestClient
                         proxy.SetSeekHandling(SeekHandling.Unsafe);
                         proxy.SetFrameOutputFormat(pixelFormat: FramePixelFormat.YV12);
 
-                        var frames = proxy.GetFrames(0);
+                        var tracks = proxy.GetTracks();
+
+                        if (tracks.Count == 0)
+                            throw new ApplicationException("No tracks found in file");
+
+                        var videoTrack = tracks.FirstOrDefault(t => t.Type == TrackType.Video);
+                        if (videoTrack == null)
+                            throw new ApplicationException("No video track in file");
+
+                        var frames = proxy.GetFrames(videoTrack.TrackNumber);
 
                         var timer = new Stopwatch();
                         timer.Start();
