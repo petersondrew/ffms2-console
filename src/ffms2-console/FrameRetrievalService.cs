@@ -447,6 +447,8 @@ namespace ffms2.console
                     // Re-init on next call
                     display.Dispose();
                     display = null;
+                    throw new FrameDisplayException(
+                        $"A fatal exception occurred while attempting to display frame {frame.FrameNumber} and SDL was re-initialized");
                 }
                 throw new FrameDisplayException(
                     $"An exception occurred while attempting to display frame {frame.FrameNumber}", ex);
